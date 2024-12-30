@@ -1,0 +1,297 @@
+#!/bin/bash
+
+### Converts one or more audiobook files into a single m4b file ready for
+### tagging.
+###
+### Usage:
+###    m4bber [OPTIONS]
+###
+### Options:
+###    --jobs, -j JOBS:       The number of simultaneous jobs to run as part of 
+###                           the conversion
+###    --root-dir, -r DIR:    The root directory used to process files. Default:
+###                           `/audiobooks`
+###    --new-dir, -n DIR:     The directory where to place new files to process
+###                           defualt: `${ROOT_DIR}/new`
+###    --backup-dir, -b DIR:  The directory to backup new files to before 
+###                           processing. If not specified, backups will not
+###                           be made.
+###    --merge-dir, -m DIR:   Where new files will be moved to for mergine
+###                           default: `${ROOT_DIR}/merge`
+###    --output-dir, -o DIR:  Where the final m4b files will be placed. Once in
+###                           this folder, the m4b files are ready for tagging.
+###    --work-dir, -w DIR:    Where the files will be worked on
+###    --chapters, -C:        Identify chapters in the resulting m4b by silence
+
+
+usage () {
+  sed -n '^###/s/^###//p' "$0"
+  exit 1
+}
+
+# Log a message with a timestamp to stderr
+log() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >&2
+}
+
+CPU_CORES="$(nproc --all)"
+ROOT_DIR="/audiobooks"
+SLEEPTIME=""
+BACKUP_DIR=""
+CHAPTERS=""
+
+
+# Parse the command line arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --jobs|-j)
+      CPU_CORES="$2"
+      shift 2
+      ;;
+    --root-dir|-r)
+      ROOT_DIR="$2"
+      shift 2
+      ;;
+    --new-dir|-n)
+      INPUT_DIR="$2"
+      shift 2
+      ;;
+    --backup-dir|-b)
+      BACKUP_DIR="$2"
+      shift 2
+      ;;
+    --merge-dir|-m)
+      MERGE_DIR="$2"
+      shift 2
+      ;;
+    --work-dir|-w)
+      WORK_DIR="$2"
+      shift 2
+      ;;
+    --output-dir|-o)
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --chapters|-C)
+      CHAPTERS="true"
+      shift
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+
+# Set the various dirs to their defaults if not already set
+INPUT_DIR="${INPUT_DIR:-${ROOT_DIR}/new}"
+MERGE_DIR="${MERGE_DIR:-${ROOT_DIR}/merge}"
+WORK_DIR="${WORK_DIR:-${ROOT_DIR}/work}"
+OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/output}"
+
+if [ -n "${BACKUP_DIR}" ]; then
+  # if backup dir isn't absolute, make it so
+  if [[ "${BACKUP_DIR}" != /* ]]; then
+    BACKUP_DIR="${ROOT_DIR}/${BACKUP_DIR}"
+  fi
+fi
+
+DIRS=(
+  "${INPUT_DIR}"
+  "${MERGE_DIR}"
+  "${WORK_DIR}"
+  "${OUTPUT_DIR}"
+)
+
+
+# Add BACKUP_DIR to DIRS if set
+if [ -n "${BACKUP_DIR}" ]; then
+  DIRS+=("${BACKUP_DIR}")
+fi
+
+
+# Make sure CPU_CORES is at least 1
+if [ "${CPU_CORES}" -lt 1 ]; then
+  CPU_CORES=1
+fi
+
+# Extensions
+M4B_EXT=".m4b"
+LOG_EXT=".log"
+
+# ensure the expected folder-structure
+for DIR in "${DIRS[@]}"; do
+  mkdir -p "${DIR}"
+
+  # Make sure the directory exists
+  if [ ! -d "${DIR}" ]; then
+    echo "Directory ${DIR} does not exist"
+    exit 1
+  fi
+
+  # Make sure the directory is writable
+  if [ ! -w "${DIR}" ]; then
+    echo "Directory ${DIR} is not writable"
+    exit 1
+  fi
+done
+
+# The exit status. If the conversion fails for any files, this will be set to 2
+STATUS=0
+
+# change to the merge folder, keeps this clear and the script could be kept
+# inside the container
+cd "${MERGE_DIR}" || return
+
+# Copy files to backup directory (if specified)
+if [ -n "${BACKUP_DIR}" ]; then
+  log "Making a backup of the whole ${INPUT_DIR}"
+  cp -Ru "${INPUT_DIR}"* ${BACKUP_DIR}
+fi
+
+#make sure all single file mp3's & m4b's are in their own folder
+log "Making sure all books are in their own folder"
+for file in "${INPUT_DIR}"*.{m4b,mp3}; do
+  if [[ -f "${file}" ]]; then
+    mkdir "${file%.*}"
+    mv "${file}" "${file%.*}"
+  fi
+done
+
+# Finds directories with nested subddirs - renames and flattens files into
+# a single folder
+log "Flattening nested subdirs 3+ levels deep and renaming files..."
+find "${INPUT_DIR}" -mindepth 3 -type f \( \
+  -name '*.mp3' -o -name '*.m4b' -o -name '*.m4a' \
+\) -print0 |
+while IFS= read -r -d '' FILE; do
+  # Split the relative path into an array
+  IFS='/' read -ra PATH_PARTS <<< "${FILE#${INPUT_DIR}/}"
+
+  # Only process if the file is at least 3 levels deep
+  if [ ${#PATH_PARTS[@]} -ge 4 ]; then
+    # Get the filename (last element)
+    FILENAME="${PATH_PARTS[-1]}"
+
+    # Construct the new filename
+    NEW_FILENAME=""
+    for ((i=4; i<${#PATH_PARTS[@]}-1; i++)); do
+        NEW_FILENAME+="${PATH_PARTS[i]} - "
+    done
+    NEW_FILENAME+="${FILENAME}"
+
+    # Create the new path (2 levels deep)
+    NEW_PATH="${INPUT_DIR}/${PATH_PARTS[3]}/${NEW_FILENAME}"
+
+    # Create the grandparent directory if it doesn't exist
+    mkdir -p "$(dirname "${NEW_PATH}")"
+
+    # Move and rename the file
+    mv -v "${FILE}" "${NEW_PATH}"
+  fi
+done
+
+# Move directories with multiple audiofiles to MERGE_DIR
+log "Moving directories with 2 or more audiofiles to ${MERGE_DIR} "
+find "${INPUT_DIR}" -maxdepth 2 -mindepth 2 -type f \( \
+  -name '*.mp3' -o -name '*.m4b' -o -name '*.m4a' \
+  \) -print0 \
+  | xargs -r -0 -L 1 dirname \
+  | sort \
+  | uniq -c \
+  | grep -E -v '^ *1 ' \
+  | sed 's/^ *[0-9]* //' \
+  | while read i; do mv -v "${i}" "${MERGE_DIR}"; done
+
+
+#Move single file mp3's to MERGE_DIR
+log "Moving single file mp3's to ${MERGE_DIR} "
+find "${INPUT_DIR}" -maxdepth 2 -type f \( \-name '*.mp3' \) \
+  -printf "%h\0" \
+  | xargs -r -0 mv -t "${MERGE_DIR}"
+
+#Moving the single m4b files to the untagged folder as no Merge needed
+log "Moving all the single m4b books to ${WORK_DIR} "
+find "${INPUT_DIR}" -maxdepth 2 -type f \( \
+  -iname \*.m4b -o -iname \*.mp4 -o -iname \*.m4a -o -iname \*.ogg \
+  \) -printf "%h\0" \
+  | xargs -r -0 mv -t "${WORK_DIR}"
+
+if ! ls -d */ 2>/dev/null; then
+  log No new audiofiles detected, exiting...
+  break
+fi
+
+log New audiofiles detected
+for BOOK in *; do
+  if [ -d "${BOOK}" ]; then
+    MPTHREE=$(find "${BOOK}" -maxdepth 2 -type f \
+     \( \-name '*.mp3' -o -name '*.m4b' \) | head -n 1)
+    M4BFILE="${WORK_DIR}/${BOOK}/${BOOK}${M4B_EXT}"
+    LOGFILE="${WORK_DIR}/${BOOK}/${BOOK}${LOG_EXT}"
+    CHAPTERS=$(ls "${MERGE_DIR}/${BOOK}/*chapters.txt" 2> /dev/null | wc -l)
+    if [ "${CHAPTERS}" != "0" ]; then
+      log Adjusting chapters based on chapters.txt file
+      mp4chaps -i "${MERGE_DIR}/${BOOK}/*${M4B_EXT}"
+      if [ $? -ne 0 ]; then
+        STATUS=2
+        log "Adjusting chapters based on chapters.txt file failed."
+        cat "${LOGFILE}" >&2
+        continue
+      fi
+      mv "${MERGE_DIR}/${BOOK}" "${WORK_DIR}"
+    else
+      log Sampling ${MPTHREE}
+      BITRATE=$(ffprobe -hide_banner -loglevel 0 -of flat -i "${MPTHREE}" \
+        -select_streams a -show_entries format=bit_rate \
+        -of default=noprint_wrappers=1:nokey=1)
+      log The folder "${BOOK}" will be merged to "${M4BFILE} at ${BITRATE}bps"
+      m4b-tool merge "${BOOK}" -n -q --audio-bitrate="${BITRATE}" \
+        --skip-cover --use-filenames-as-chapters \
+        --no-chapter-reindexing --audio-codec=libfdk_aac \
+        --jobs="${CPU_CORES}" --output-file="${M4BFILE}" \
+        --logfile="${LOGFILE}"
+      # Check if the tool was successful. If not, output the logfile
+      if [ $? -ne 0 ]; then
+          STATUS=2
+        log "Conversion of ${BOOK} to ${M4BFILE} failed."
+        cat "${LOGFILE}" >&2
+        continue
+      fi
+
+      # If --silence was specified, then run m4b-tool again to add chapter
+      # breaks based on silence
+      if [ -n "${CHAPTERS}" ]; then
+        log Adding chapters based on silence
+        m4b-tool chapters --adjust-by-silence -o "${M4BFILE}.chapters" \
+          "${M4BFILE}"
+        if [ $? -ne 0 ]; then
+          STATUS=2
+          log "Adding chapters based on silence failed."
+          cat "${LOGFILE}" >&2
+          continue
+        fi
+        mv "${M4BFILE}.chapters" "${M4BFILE}"
+      fi
+      # The conversion was successful, so remove the original files
+      rm -rf "${MERGE_DIR}/${BOOK}"
+    fi
+    log Finished Converting
+
+    # make sure all single file m4b's are in their own folder
+    # log Putting the m4b into a folder
+    # for file in ${WORK_DIR}/*.m4b; do
+    #   if [[ -f "${file}" ]]; then
+    #     mkdir "${file%.*}"
+    #     mv "${file}" "${file%.*}"
+    #   fi
+    # done
+
+    log Moving merged files to the output folder
+    mv "${WORK_DIR}/${BOOK}" "${OUTPUT_DIR}"
+
+    log Deleting duplicate mp3 audiobook folder
+  fi
+done
+
+# Exit with the status
+exit "${STATUS}"

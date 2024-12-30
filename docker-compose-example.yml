@@ -1,0 +1,9 @@
+services:
+  tool:
+    # image: shaug/m4bber
+    build: .
+    container_name: m4bber
+    volumes:
+      - /Volumes/Media/Books/processing:/audiobooks
+    command:
+      - --chapters
