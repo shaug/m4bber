@@ -21,7 +21,14 @@
 ###    --output-dir, -o DIR:  Where the final m4b files will be placed. Once in
 ###                           this folder, the m4b files are ready for tagging.
 ###    --work-dir, -w DIR:    Where the files will be worked on
-###    --chapters, -C:        Identify chapters in the resulting m4b by silence
+###    --chapter-detection, -C:
+###                           Detect chapters in the resulting m4b by silence
+###
+### Environment Variables:
+###
+### Every command line option should default to an env variable of the same
+### name, with M4BBER_ prefixed. This allows for easy configuration via
+### environment.
 
 
 usage () {
@@ -34,12 +41,22 @@ log() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >&2
 }
 
-CPU_CORES="$(nproc --all)"
-ROOT_DIR="/audiobooks"
-SLEEPTIME=""
-BACKUP_DIR=""
-CHAPTERS=""
+# Every command line option should default to an env variable of the same name,
+# with M4BBER_ prefixed. This allows for easy configuration via environment.
 
+CPU_CORES="${M4BBER_JOBS:-$(nproc --all)}"
+ROOT_DIR="${M4BBER_ROOT_DIR:-/audiobooks}"
+CHAPTERS="${M4BBER_CHAPTER_DETECTION:-}"
+
+# Default the directories to the environment variables if they are set.
+# If they are set via command line, they will override these. If neither are
+# set, they will default to the values below.
+
+BACKUP_DIR="${M4BBER_BACKUP_DIR:-}"
+INPUT_DIR="${M4BBER_NEW_DIR:-}"
+MERGE_DIR="${M4BBER_MERGE_DIR:-}"
+WORK_DIR="${M4BBER_WORK_DIR:-}"
+OUTPUT_DIR="${M4BBER_OUTPUT_DIR:-}"
 
 # Parse the command line arguments
 while [[ $# -gt 0 ]]; do
@@ -72,7 +89,7 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_DIR="$2"
       shift 2
       ;;
-    --chapters|-C)
+    --chapter-detection|-C)
       CHAPTERS="true"
       shift
       ;;
@@ -258,8 +275,8 @@ for BOOK in *; do
         continue
       fi
 
-      # If --silence was specified, then run m4b-tool again to add chapter
-      # breaks based on silence
+      # If chapter detection was enabled, then run m4b-tool again to add chapter
+      # breaks based on silence detection.
       if [ -n "${CHAPTERS}" ]; then
         log Adding chapters based on silence
         m4b-tool chapters --adjust-by-silence -o "${M4BFILE}.chapters" \

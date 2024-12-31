@@ -6,4 +6,4 @@ services:
     volumes:
       - /Volumes/Media/Books/processing:/audiobooks
     command:
-      - --chapters
+      - --chapter-detection

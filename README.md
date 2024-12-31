@@ -1,7 +1,8 @@
 # m4bber
 
-This container is an extension of the [m4b-tool] for converting folders of
-audiofiles into m4b audiobooks ready for tagging.
+The m4bber (pronounced 'mabber') container is an extension of the
+[m4b-tool] for converting folders of audiofiles into m4b audiobooks ready for
+tagging.
 
 This repo is a fork of [auto-m4b] (which is in turn a fork of
 [docker-m4b-tool]), with the goal of limiting the tool to *just* conversion
@@ -115,6 +116,9 @@ temp
 
 #### docker-compose.yml
 
+The m4bber tool can be customized with command-line arguments.
+
+
 ```yaml
 services:
   m4bber:
@@ -127,9 +131,45 @@ services:
       - 2
       - --backup-dir
       - backup
-      - --sleep
-      - 1m
+      - --chapter-detection
 ```
+
+Or it can customized with environment variables.
+
+```yaml
+services:
+  m4bber:
+    image: shaug/m4bber
+    container_name: m4bber
+    volumes:
+      - /path/to/audiobooks:/audiobooks
+    environment:
+      - M4BBER_JOBS=2
+      - M4BBER_BACKUP_DIR=backup
+      - M4BBER_CHAPTER_DETECTION=true
+```
+
+Or a combination of both.
+
+```yaml
+services:
+  m4bber:
+    image: shaug/m4bber
+    container_name: m4bber
+    volumes:
+      - /path/to/audiobooks:/audiobooks
+    command:
+      - --jobs
+      - 2
+      - --backup-dir
+      - backup
+    environment:
+      - M4BBER_CHAPTERS=true
+```
+
+When using both, the command-line arguments will override the environment
+variables.
+
 
 ## To Manually Set Chapters:
 
