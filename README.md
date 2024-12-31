@@ -24,7 +24,7 @@ output folder. Thypically, this output folder is where the [beets.io audible
 plugin] will look for audiobooks and use the Audible API to tag and organize
 your books.
 
-[beets.io audible plugin]: https://github.com/seanap/beets-audible
+[beets.io audible plugin]: https://github.com/Neurrone/beets-audible
 
 ## Intended Use
 
@@ -39,8 +39,8 @@ via a cron job or through some filesystem trigger.
   and saved to an `/output` folder  
 * When run, this script will look for files in `/audiobooks/new` and
   automatically move mp3 books to `/audiobooks/merge`, then automatically put
-  all m4b's in the output folder `/audiobooks/output`.  It also optionally makes a
-  backup of the files first in case something goes wrong.
+  all m4b's in the output folder `/audiobooks/output`.  It also optionally
+  makes a backup of the files first in case something goes wrong.
 
 Use the [beets.io audible plugin] to finish the tagging and sorting.
 
@@ -189,10 +189,10 @@ variables.
 
 The script will automatically use all CPU cores available, to change the
 amount of cpu cores for the converting change the `--jobs` flag in the
-m4b-tool command, but do not set it higher than the amount of cores
+`m4b-tool` command, but do not set it higher than the amount of cores
 available.  
 
-#### Backup Folder
+#### Backup Foldehttps://github.com/Neurrone/beets-audible
 
 Files can be backed up to a folder in case something goes wrong. THis is also
 useful when the original files are being
