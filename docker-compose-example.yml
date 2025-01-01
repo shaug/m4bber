@@ -1,9 +1,11 @@
 services:
   tool:
-    # image: shaug/m4bber
-    build: .
+    image: shaug/m4bber:main
+    # build: .
     container_name: m4bber
     volumes:
-      - /Volumes/Media/Books/processing:/audiobooks
+      - ./audiobooks:/audiobooks
+    environment:
+      - M4BBER_BACKUP_DIR=backups
     command:
       - --chapter-detection

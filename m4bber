@@ -235,80 +235,79 @@ find "${INPUT_DIR}" -maxdepth 2 -type f \( \
 
 if ! ls -d */ 2>/dev/null; then
   log No new audiofiles detected, exiting...
-  break
-fi
-
-log New audiofiles detected
-for BOOK in *; do
-  if [ -d "${BOOK}" ]; then
-    MPTHREE=$(find "${BOOK}" -maxdepth 2 -type f \
-     \( \-name '*.mp3' -o -name '*.m4b' \) | head -n 1)
-    M4BFILE="${WORK_DIR}/${BOOK}/${BOOK}${M4B_EXT}"
-    LOGFILE="${WORK_DIR}/${BOOK}/${BOOK}${LOG_EXT}"
-    CHAPTERS=$(ls "${MERGE_DIR}/${BOOK}/*chapters.txt" 2> /dev/null | wc -l)
-    if [ "${CHAPTERS}" != "0" ]; then
-      log Adjusting chapters based on chapters.txt file
-      mp4chaps -i "${MERGE_DIR}/${BOOK}/*${M4B_EXT}"
-      if [ $? -ne 0 ]; then
-        STATUS=2
-        log "Adjusting chapters based on chapters.txt file failed."
-        cat "${LOGFILE}" >&2
-        continue
-      fi
-      mv "${MERGE_DIR}/${BOOK}" "${WORK_DIR}"
-    else
-      log Sampling ${MPTHREE}
-      BITRATE=$(ffprobe -hide_banner -loglevel 0 -of flat -i "${MPTHREE}" \
-        -select_streams a -show_entries format=bit_rate \
-        -of default=noprint_wrappers=1:nokey=1)
-      log The folder "${BOOK}" will be merged to "${M4BFILE} at ${BITRATE}bps"
-      m4b-tool merge "${BOOK}" -n -q --audio-bitrate="${BITRATE}" \
-        --skip-cover --use-filenames-as-chapters \
-        --no-chapter-reindexing --audio-codec=libfdk_aac \
-        --jobs="${CPU_CORES}" --output-file="${M4BFILE}" \
-        --logfile="${LOGFILE}"
-      # Check if the tool was successful. If not, output the logfile
-      if [ $? -ne 0 ]; then
-          STATUS=2
-        log "Conversion of ${BOOK} to ${M4BFILE} failed."
-        cat "${LOGFILE}" >&2
-        continue
-      fi
-
-      # If chapter detection was enabled, then run m4b-tool again to add chapter
-      # breaks based on silence detection.
-      if [ -n "${CHAPTERS}" ]; then
-        log Adding chapters based on silence
-        m4b-tool chapters --adjust-by-silence -o "${M4BFILE}.chapters" \
-          "${M4BFILE}"
+else
+  log New audiofiles detected
+  for BOOK in *; do
+    if [ -d "${BOOK}" ]; then
+      MPTHREE=$(find "${BOOK}" -maxdepth 2 -type f \
+       \( \-name '*.mp3' -o -name '*.m4b' \) | head -n 1)
+      M4BFILE="${WORK_DIR}/${BOOK}/${BOOK}${M4B_EXT}"
+      LOGFILE="${WORK_DIR}/${BOOK}/${BOOK}${LOG_EXT}"
+      CHAPTERS=$(ls "${MERGE_DIR}/${BOOK}/*chapters.txt" 2> /dev/null | wc -l)
+      if [ "${CHAPTERS}" != "0" ]; then
+        log Adjusting chapters based on chapters.txt file
+        mp4chaps -i "${MERGE_DIR}/${BOOK}/*${M4B_EXT}"
         if [ $? -ne 0 ]; then
           STATUS=2
-          log "Adding chapters based on silence failed."
+          log "Adjusting chapters based on chapters.txt file failed."
           cat "${LOGFILE}" >&2
           continue
         fi
-        mv "${M4BFILE}.chapters" "${M4BFILE}"
+        mv "${MERGE_DIR}/${BOOK}" "${WORK_DIR}"
+      else
+        log Sampling ${MPTHREE}
+        BITRATE=$(ffprobe -hide_banner -loglevel 0 -of flat -i "${MPTHREE}" \
+          -select_streams a -show_entries format=bit_rate \
+          -of default=noprint_wrappers=1:nokey=1)
+        log The folder "${BOOK}" will be merged to "${M4BFILE} at ${BITRATE}bps"
+        m4b-tool merge "${BOOK}" -n -q --audio-bitrate="${BITRATE}" \
+          --skip-cover --use-filenames-as-chapters \
+          --no-chapter-reindexing --audio-codec=libfdk_aac \
+          --jobs="${CPU_CORES}" --output-file="${M4BFILE}" \
+          --logfile="${LOGFILE}"
+        # Check if the tool was successful. If not, output the logfile
+        if [ $? -ne 0 ]; then
+            STATUS=2
+          log "Conversion of ${BOOK} to ${M4BFILE} failed."
+          cat "${LOGFILE}" >&2
+          continue
+        fi
+
+        # If chapter detection was enabled, then run m4b-tool again to add
+        # chapter breaks based on silence detection.
+        if [ -n "${CHAPTERS}" ]; then
+          log Adding chapters based on silence
+          m4b-tool chapters --adjust-by-silence -o "${M4BFILE}.chapters" \
+            "${M4BFILE}"
+          if [ $? -ne 0 ]; then
+            STATUS=2
+            log "Adding chapters based on silence failed."
+            cat "${LOGFILE}" >&2
+            continue
+          fi
+          mv "${M4BFILE}.chapters" "${M4BFILE}"
+        fi
+        # The conversion was successful, so remove the original files
+        rm -rf "${MERGE_DIR}/${BOOK}"
       fi
-      # The conversion was successful, so remove the original files
-      rm -rf "${MERGE_DIR}/${BOOK}"
+      log Finished Converting
+
+      # make sure all single file m4b's are in their own folder
+      # log Putting the m4b into a folder
+      # for file in ${WORK_DIR}/*.m4b; do
+      #   if [[ -f "${file}" ]]; then
+      #     mkdir "${file%.*}"
+      #     mv "${file}" "${file%.*}"
+      #   fi
+      # done
+
+      log Moving merged files to the output folder
+      mv "${WORK_DIR}/${BOOK}" "${OUTPUT_DIR}"
+
+      log Deleting duplicate mp3 audiobook folder
     fi
-    log Finished Converting
-
-    # make sure all single file m4b's are in their own folder
-    # log Putting the m4b into a folder
-    # for file in ${WORK_DIR}/*.m4b; do
-    #   if [[ -f "${file}" ]]; then
-    #     mkdir "${file%.*}"
-    #     mv "${file}" "${file%.*}"
-    #   fi
-    # done
-
-    log Moving merged files to the output folder
-    mv "${WORK_DIR}/${BOOK}" "${OUTPUT_DIR}"
-
-    log Deleting duplicate mp3 audiobook folder
-  fi
-done
+  done
+fi
 
 # Exit with the status
 exit "${STATUS}"
