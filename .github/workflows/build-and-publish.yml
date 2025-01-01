@@ -5,18 +5,15 @@ on:
     branches: [main]
 
 jobs:
-  # define job to build and publish docker image
-  build-and-push-docker-image:
+  docker:
     permissions:
       contents: read
       packages: write
       attestations: write
       id-token: write
 
-    name: Build Docker image and push to repositories
     runs-on: ubuntu-latest
 
-    # steps to perform in job
     steps:
       - uses: actions/checkout@v2
       - uses: docker/metadata-action@v5
@@ -36,11 +33,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - uses: docker/setup-buildx-action@v3
+
       - uses: docker/build-push-action@v6
         with:
+          platforms: linux/amd64,linux/arm64
+          push: true
           context: .
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Image digest
-        run: echo ${{ steps.docker_build.outputs.digest }}
