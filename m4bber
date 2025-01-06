@@ -7,13 +7,13 @@
 ###    m4bber [OPTIONS]
 ###
 ### Options:
-###    --jobs, -j JOBS:       The number of simultaneous jobs to run as part of 
+###    --jobs, -j JOBS:       The number of simultaneous jobs to run as part of
 ###                           the conversion
 ###    --root-dir, -r DIR:    The root directory used to process files. Default:
 ###                           `/audiobooks`
 ###    --new-dir, -n DIR:     The directory where to place new files to process
 ###                           defualt: `${ROOT_DIR}/new`
-###    --backup-dir, -b DIR:  The directory to backup new files to before 
+###    --backup-dir, -b DIR:  The directory to backup new files to before
 ###                           processing. If not specified, backups will not
 ###                           be made.
 ###    --merge-dir, -m DIR:   Where new files will be moved to for mergine
@@ -167,7 +167,9 @@ fi
 
 #make sure all single file mp3's & m4b's are in their own folder
 log "Making sure all books are in their own folder"
-for file in "${INPUT_DIR}"*.{m4b,mp3}; do
+for file in "${INPUT_DIR}"/*.{m4b,mp3}; do
+  # Need to check if the returned path is an actual file, as bash will return
+  # the glob pattern if no files are found
   if [[ -f "${file}" ]]; then
     mkdir "${file%.*}"
     mv "${file}" "${file%.*}"
