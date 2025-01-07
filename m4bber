@@ -261,9 +261,8 @@ else
         log The folder "${BOOK}" will be merged to "${M4BFILE} at ${BITRATE}bps"
         m4b-tool merge "${BOOK}" -n -q --audio-bitrate="${BITRATE}" \
           --skip-cover --use-filenames-as-chapters \
-          --no-chapter-reindexing --audio-codec=libfdk_aac \
           --jobs="${CPU_CORES}" --output-file="${M4BFILE}" \
-          --logfile=/dev/stderr
+          --logfile=/dev/stderr --no-chapter-reindexing
         # Check if the tool was successful.
         if [ $? -ne 0 ]; then
             STATUS=2
