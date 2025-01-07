@@ -46,7 +46,7 @@ log() {
 
 CPU_CORES="${M4BBER_JOBS:-$(nproc --all)}"
 ROOT_DIR="${M4BBER_ROOT_DIR:-/audiobooks}"
-CHAPTERS="${M4BBER_CHAPTER_DETECTION:-}"
+DETECT_CHAPTERS="${M4BBER_CHAPTER_DETECTION:-}"
 
 # Default the directories to the environment variables if they are set.
 # If they are set via command line, they will override these. If neither are
@@ -90,7 +90,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --chapter-detection|-C)
-      CHAPTERS="true"
+      DETECT_CHAPTERS="true"
       shift
       ;;
     *)
@@ -272,7 +272,7 @@ else
 
         # If chapter detection was enabled, then run m4b-tool again to add
         # chapter breaks based on silence detection.
-        if [ -n "${CHAPTERS}" ]; then
+        if [ -n "${DETECT_CHAPTERS}" ]; then
           log Adding chapters based on silence
           m4b-tool chapters --adjust-by-silence -o "${M4BFILE}.chapters" "${M4BFILE}"
           if [ $? -ne 0 ]; then
@@ -286,15 +286,6 @@ else
         rm -rf "${MERGE_DIR}/${BOOK}"
       fi
       log Finished Converting
-
-      # make sure all single file m4b's are in their own folder
-      # log Putting the m4b into a folder
-      # for file in ${WORK_DIR}/*.m4b; do
-      #   if [[ -f "${file}" ]]; then
-      #     mkdir "${file%.*}"
-      #     mv "${file}" "${file%.*}"
-      #   fi
-      # done
 
       log Moving merged files to the output folder
       mv "${WORK_DIR}/${BOOK}" "${OUTPUT_DIR}"
