@@ -23,6 +23,8 @@
 ###    --work-dir, -w DIR:    Where the files will be worked on
 ###    --chapter-detection, -C:
 ###                           Detect chapters in the resulting m4b by silence
+###    --remove-chapters-index, -R:
+###                           Remove the chapter index file after merging
 ###
 ### Environment Variables:
 ###
@@ -47,6 +49,7 @@ log() {
 CPU_CORES="${M4BBER_JOBS:-$(nproc --all)}"
 ROOT_DIR="${M4BBER_ROOT_DIR:-/audiobooks}"
 DETECT_CHAPTERS="${M4BBER_CHAPTER_DETECTION:-}"
+REMOVE_CHAPTERS_INDEX="${M4BBER_REMOVE_CHAPTERS_INDEX:-}"
 
 # Default the directories to the environment variables if they are set.
 # If they are set via command line, they will override these. If neither are
@@ -91,6 +94,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --chapter-detection|-C)
       DETECT_CHAPTERS="true"
+      shift
+      ;;
+    --remove-chapters-index|-R)
+      REMOVE_CHAPTERS_INDEX="true"
       shift
       ;;
     *)
@@ -249,6 +256,10 @@ else
           log "Adjusting chapters based on chapters.txt file failed."
           continue
         fi
+        if [ -n "${REMOVE_CHAPTERS_INDEX}" ]; then
+          log Removing chapters index file
+          rm -f "${MERGE_DIR}/${BOOK}/*chapters.txt"
+        fi
         mv "${MERGE_DIR}/${BOOK}" "${OUTPUT_DIR}"
       else
         MPTHREE=$(find "${BOOK}" -maxdepth 2 -type f \
@@ -286,6 +297,11 @@ else
         rm -rf "${MERGE_DIR}/${BOOK}"
       fi
       log Finished Converting
+
+      if [ -n "${REMOVE_CHAPTERS_INDEX}" ]; then
+        log Removing chapters index file
+        rm -f "${MERGE_DIR}/${BOOK}/*chapters.txt"
+      fi
 
       log Moving merged files to the output folder
       mv "${WORK_DIR}/${BOOK}" "${OUTPUT_DIR}"
