@@ -7,10 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fdkaac \
         ffmpeg \
         php-cli \
+        php-curl \
         php-intl \
         php-json \
         php-mbstring \
-        php-xml
+        php-xml \
+        php-zip
 
 # Build container with tools needed to build runtime apps from source
 FROM base AS builder
@@ -21,15 +23,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # mp4v2 provides utilities to read, create, and modify mp4 files
 RUN git clone https://github.com/sandreas/mp4v2 \
-    && cd mp4v2 \
-    && ./configure \
-    && make \
-    && make install
+        && cd mp4v2 \
+        && ./configure \
+        && make \
+        && make install
 
 # m4b-tool is a php-based tool to work with m4b audio books
 RUN curl -o /usr/local/bin/m4b-tool -L \
         https://github.com/sandreas/m4b-tool/releases/latest/download/m4b-tool.phar \
-    && chmod +x /usr/local/bin/m4b-tool
+        && chmod +x /usr/local/bin/m4b-tool
 
 ADD m4bber /usr/local/bin
 
